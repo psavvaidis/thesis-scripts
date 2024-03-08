@@ -1,0 +1,7 @@
+*.txt
+*.csv
+/logs
+/uncompressed_logs
+**/__pycache__/
+!websites.txt
+/kubernetes

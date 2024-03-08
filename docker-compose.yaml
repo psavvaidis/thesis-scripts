@@ -1,0 +1,5 @@
+services:
+  vv8:
+    image: visiblev8/vv8-base
+    volumes:
+      - /home/panos/CodingProjects/visiblev8/experiment:/home/node
