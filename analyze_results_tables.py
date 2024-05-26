@@ -6,6 +6,7 @@ import pymongo
 from pymongo.cursor import Cursor
 from psycopg2.errors import UndefinedTable
 from typing import Union
+import pprint
 
 class MySQLDatabase():
 
@@ -28,7 +29,7 @@ class MySQLDatabase():
                 user='panos',
                 password='password',
                 host='127.0.0.1',
-                port='5432',
+                port='22601',
                 sslmode='disable',
                 database='mfeatures')
             
@@ -43,8 +44,67 @@ class MySQLDatabase():
         self._cursor.close()
         self._database.close()
 
+    def get_all_setters_getters(self):
+        query = f'''
+                    select tablename from pg_tables where schemaname = 'mfeatures_results';
+                '''
+        table_names = [table[0] for table in self.execute_query(query)]
 
-    def list_set_get_for(self, website)-> Self:
+        self._state = {
+            'query_results': table_names
+        }
+        return self
+
+
+    def parse_set_get(self)-> Self:
+
+        if 'query_results' not in self._state.keys():
+            raise Exception('Query results do not exist. Run \'get_all_setters_getters\' method first')
+
+        table_names = self._state['query_results']
+
+        for table in table_names:
+
+            query = f'''
+                        select *
+                        from
+                        (select  distinct a.feature_id, feature_name, a.setter, setter_tld, a.getter, getter_tld, b.pairs,
+                        CAST(
+                            case
+                                when setter_tld = getter_tld
+                                    then 0
+                                else 1
+                            end as bit
+                        ) as different_origin 
+                        from
+                        (select feature_id, feature_name, setter, (regexp_match(setter_url, '^[^:]*\:/\/(?:[^ :.\/]*\.)+[^ \n\/]*'))[1] as setter_tld, getter, (regexp_match(getter_url,'^[^:]*\:\/\/(?:[^ :.\/]*\.)+[^ \n\/]*'))[1] as getter_tld
+                        from mfeatures_results.{table}) as a
+                        inner join
+                        (SELECT feature_id, setter, getter, COUNT(*) as pairs FROM mfeatures_results.{table}
+                        group by feature_id, setter, getter
+                        order by pairs desc, setter desc, getter desc) as b
+                        on(a.feature_id = b.feature_id)
+                        where a.setter = b.setter and a.getter = b.getter
+                        order by b.pairs desc) as generic
+                        where different_origin = '1'
+                        '''
+
+            self._state = {
+                'query_results': self.execute_query(query),
+                'website': '.'.join(table.split('_')[:-2])
+            }
+
+            try:
+                self.parse_to_mongo()
+            except Exception as e:
+                print('Table: ' + table + '\n' + str(e) )
+
+
+        return self
+    
+
+
+    def parse_set_get_for(self, website)-> Self:
 
         query = f'''
                     select *
@@ -113,6 +173,13 @@ class MySQLDatabase():
                             } for row in results]
         }
         # print(self._mongo['website_aggregator'][f'{website}'].count_documents({}))
+
+        self._mongo['website_aggregator']
+
+        if f'website_aggregator.{website}' in self._mongo.list_collection_names():
+            print(f'{website} already exists, skipping...')
+            return self
+
         if force_write or self._mongo['website_aggregator'][f'{website}'].count_documents({}) == 0:
             res = self._mongo['website_aggregator'][f'{website}'].insert_one(data)
             print(res)
@@ -123,14 +190,14 @@ class MySQLDatabase():
     def fetch_website_features_from_mongo(self, *args)->Union[Self, list, str]:
         if args:
             website = args[0]
-        elif self._state['website']:
-            website = self._state['website']
+        # elif self._state['website']:
+        #     website = self._state['website']
         else:
             print('Website wasn\'t found')
             raise TypeError
 
         try:
-            data = self._mongo['website_aggregator'][f'{website}'].find_one()['raw']
+            data = self._mongo[f'{website}'].find_one()['raw']
 
             
             self._state = {
@@ -141,6 +208,7 @@ class MySQLDatabase():
             return self
         except TypeError as e:
             print('Error, website does not exist in mongo database')
+            print(e)
             return e
 
         
@@ -148,32 +216,43 @@ class MySQLDatabase():
 
     def find_cooperating_urls(self, *args) -> Self | None:
 
-        data = self._state['data']
-        website = self._state['website']
+        for doc in self._mongo.list_collection_names():
+            self.fetch_website_features_from_mongo(doc)
+            print(self._state)
 
-        cooperating_urls = {}
+            data = self._state['data']
+            website = self._state['website']
 
-        for row in data:
-            setter_url = row['setter_top_level_domain']
-            getter_url = row['getter_top_level_domain']
-            pairs = row['number_of_pairs']
+            cooperating_urls = {}
 
-            saved_flag = False
-            for key in cooperating_urls.keys():
-                if setter_url in key and getter_url in key:
-                    cooperating_urls[f'{key}']['pairs'] += pairs
-                    saved_flag = True
+            for row in data:
+                setter_url = row['setter_top_level_domain']
+                getter_url = row['getter_top_level_domain']
+                pairs = row['number_of_pairs']
+
+
+                if setter_url is None or getter_url is None:
+                    self._mongo[f'{website}'].find_one_and_update({}, { '$set': {'manual_review': 'true'}})
                     break
-            
-            if saved_flag:
-                continue
 
-            key_value = f'{setter_url}_{getter_url}'
-            cooperating_urls[f'{key_value}'] = {}
-            cooperating_urls[f'{key_value}']['urls'] = [setter_url, getter_url]
-            cooperating_urls[f'{key_value}']['pairs'] = pairs
 
-        mongo_obj = self._mongo['website_aggregator'][f'{website}'].find_one_and_update({}, { '$set': {'Meta.url_combo': cooperating_urls}})
+                saved_flag = False
+                for key in cooperating_urls.keys():
+                    if setter_url in key and getter_url in key:
+                        cooperating_urls[f'{key}']['pairs'] += pairs
+                        saved_flag = True
+                        break
+
+                
+                if saved_flag:
+                    continue
+
+                key_value = f'{setter_url}_{getter_url}'
+                cooperating_urls[f'{key_value}'] = {}
+                cooperating_urls[f'{key_value}']['urls'] = [setter_url, getter_url]
+                cooperating_urls[f'{key_value}']['pairs'] = pairs
+
+            mongo_obj = self._mongo[f'{website}'].find_one_and_update({}, { '$set': {'Meta.url_combo': cooperating_urls}})
 
         return self
 
@@ -210,37 +289,75 @@ class MySQLDatabase():
         return self
     
     def aggregate_features_per_website(self, *args):
+        for doc in self._mongo.list_collection_names():
+            self.fetch_website_features_from_mongo(doc)
 
-        data = self._state['data']
-        website = self._state['website']
+            data = self._state['data']
+            website = self._state['website']
 
-        features = {}
+            features = {}
 
-        for row in data:
+            for row in data:
 
-            if row['feature_name'] not in features:
-                features[row['feature_name']] = {
-                    'name': row['feature_name'],
-                    'pairs': 0,
-                    'urls': set()
+                if row['feature_name'] not in features:
+                    features[row['feature_name']] = {
+                        'name': row['feature_name'],
+                        'pairs': 0,
+                        'urls': set()
+                    }
+
+                setter_url = row['setter_top_level_domain']
+                getter_url = row['getter_top_level_domain']
+                pairs = row['number_of_pairs']
+
+                if setter_url is None or getter_url is None:
+                    self._mongo[f'{website}'].find_one_and_update({}, { '$set': {'manual_review': 'true'}})
+                    break
+
+                features[row['feature_name']]['pairs'] += pairs
+
+                features[row['feature_name']]['urls'].add(tuple([setter_url,search_multi_domain(setter_url)]))
+                features[row['feature_name']]['urls'].add(tuple([getter_url,search_multi_domain(getter_url)]))
+
+            for feature in features:
+                features[feature]['urls'] = list(features[feature]['urls'])
+
+            mongo_obj = self._mongo[f'{website}'].find_one()
+
+            results = self._mongo[f'{website}'].update_one({}, {'$set':{'Meta.features' : features}})
+            
+        return self
+
+    def find_most_popular_features(self, *args):
+
+        for doc in self._mongo.list_collection_names():
+            self.fetch_website_features_from_mongo(doc)
+
+            data = self._state['data']
+            website = self._state['website']
+
+            pipeline = [
+            {"$project":{"featuresArray": {"$objectToArray": "$Meta.features"}}},
+            {"$unwind":"$featuresArray"},
+            {"$group":
+                {
+                    "_id": None,
+                    "feature_name": {"$max": "$featuresArray.v.name"},
+                    "mostPopular": {"$max": "$featuresArray.v.pairs"}
                 }
+            },
+            {"$project":
+                {
+                    "_id": 0,
+                    "feature": "$feature_name",
+                    "count": "$mostPopular",
+                },
+            },
+            ]
 
-            setter_url = row['setter_top_level_domain']
-            getter_url = row['getter_top_level_domain']
-            pairs = row['number_of_pairs']
+            print(self._mongo[f'{website}'].aggregate(pipeline))
 
-            features[row['feature_name']]['pairs'] += pairs
 
-            features[row['feature_name']]['urls'].add([setter_url,search_multi_domain(setter_url)])
-            features[row['feature_name']]['urls'].add([getter_url,search_multi_domain(getter_url)])
-
-        for feature in features:
-            features[feature]['urls'] = list(features[feature]['urls'])
-
-        mongo_obj = self._mongo['website_aggregator'][f'{website}'].find_one()
-
-        results = self._mongo['website_aggregator'][f'{website}'].update_one({}, {'$set':{'Meta.features' : features}})
-        
         return self
 
     def cluster_websites(website):
@@ -252,18 +369,21 @@ class MySQLDatabase():
     
 
 if __name__=="__main__":
-    website = 'velvet.com'
-    # db = MySQLDatabase()
+
+    # with open()
+    # website = 'velvet.com'
+    db = MySQLDatabase()
 
 
-    # db.connect_to_db()\
-    #     .list_set_get_for(website)\
-    #     .parse_to_mongo()\
-    #     .fetch_website_features_from_mongo()\
-    #     .aggregate_features_per_website()\
-    #     .find_cooperating_urls()
+    db.connect_to_db().find_most_popular_features()
+        # .get_all_setters_getters()\
+        # .parse_set_get()
+        # .parse_to_mongo()\
+        # .fetch_website_features_from_mongo()
+        # .aggregate_features_per_website()\
+        # .find_cooperating_urls()
 
-    # db.close()
+    db.close()
 
 
 

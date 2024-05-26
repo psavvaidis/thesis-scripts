@@ -287,7 +287,7 @@ aliyuncs.com
 dnsmadeeasy.com
 booking.com
 hotjar.com
-www.gov.uk
+gov.uk
 dailymotion.com
 b-cdn.net
 teamviewer.com
@@ -1029,7 +1029,7 @@ ucla.edu
 idnes.cz
 adcolony.com
 parsely.com
-www.gov.br
+gov.br
 cookiedatabase.org
 ox.ac.uk
 marca.com
@@ -1588,7 +1588,7 @@ xnxx3.com
 onlinesbi.sbi
 livescore.in
 forebet.com
-www.gob.mx
+gob.mx
 550909.com
 1377x.to
 bikewale.com
@@ -1920,7 +1920,7 @@ intermedia.net
 stumbleupon.com
 sfgate.com
 census.gov
-www.nhs.uk
+nhs.uk
 house.gov
 si.edu
 webs.com
@@ -2634,7 +2634,7 @@ tdnsv6.com
 pushwoosh.com
 wistia.com
 moz.com
-www.gov.cn
+gov.cn
 windy.com
 blogspot.co.uk
 freshchat.com
@@ -4798,7 +4798,7 @@ mailgun.net
 iranlms.ir
 appdynamics.com
 alibabausercontent.com
-www.gov.pl
+gov.pl
 mxplay.com
 hpeprint.com
 insiderintelligence.com
@@ -9124,7 +9124,7 @@ indianoil.in
 adxpremium.services
 iliad.it
 startech.com.bd
-www.gob.pe
+gob.pe
 leroymerlin.pt
 comiko.net
 gdz-raketa.ru
