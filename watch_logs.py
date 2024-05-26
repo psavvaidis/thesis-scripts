@@ -12,8 +12,11 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+<<<<<<< HEAD
 from selenium_stealth import stealth
 from selenium.common.exceptions import TimeoutException
+=======
+>>>>>>> 04a7c01a3af8937ddcdcbf3cab25f8169957c102
 
 from watchdog.observers import Observer
 from watchdog.events import LoggingEventHandler, FileSystemEventHandler
@@ -36,6 +39,7 @@ if __name__ == "__main__":
 
     # Set Chrome options
     selenium_options = Options()
+<<<<<<< HEAD
     # selenium_options.add_argument("start-maximized")
     selenium_options.add_argument("--no-sandbox")
     selenium_options.add_argument("--headless=new")
@@ -92,6 +96,26 @@ if __name__ == "__main__":
     
 
 
+=======
+    selenium_options.add_argument('--no-sandbox')
+    selenium_options.add_argument('--headless=new')
+    # selenium_options.add_argument('--timeout=300000')
+    selenium_options.add_argument('--virtual-time-budget=30000')
+    selenium_options.add_argument('--user-data-dir=/tmp')
+    selenium_options.add_argument('--disable-gpu')
+    selenium_options.add_argument('--disable-dev-shm-usage')
+    selenium_options.binary_location = vv8_path
+
+    try:
+        selenium_driver = selenium.webdriver.Chrome(options=selenium_options)
+        selenium_driver.get("https://google.com")
+        # WebDriverWait(selenium_driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+    except Exception as e:
+        print(e)
+        selenium_driver.quit()
+    # finally:
+    #     selenium_driver.quit()
+>>>>>>> 04a7c01a3af8937ddcdcbf3cab25f8169957c102
 
     class MyHandler(FileSystemEventHandler):
 
